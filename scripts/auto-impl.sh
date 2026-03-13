@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+# Claude Codeのネストセッション検知を回避
+unset CLAUDECODE
+
 # 環境変数チェック
 : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
 : "${ISSUE_TITLE:?ISSUE_TITLE is required}"
