@@ -1,0 +1,70 @@
+name: Auto Implementation
+
+on:
+  issues:
+    types: [labeled]
+
+concurrency:
+  group: auto-impl-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-impl:
+    runs-on: self-hosted
+    if: github.event.label.name == 'auto-impl'
+    timeout-minutes: 30
+
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: ラベル切替
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --remove-label "auto-impl" \
+            --add-label "auto-impl-in-progress"
+
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 自動実装実行
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: bash scripts/auto-impl.sh
+
+      - name: 成功時ラベル除去
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --remove-label "auto-impl-in-progress"
+
+      - name: 失敗時通知
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --body "## 自動実装が失敗しました
+
+          [ワークフローログを確認](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+
+          gh issue edit ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --remove-label "auto-impl-in-progress" || true
+          gh issue edit ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --add-label "auto-impl-failed" || true
